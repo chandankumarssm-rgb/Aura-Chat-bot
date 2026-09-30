@@ -1,0 +1,341 @@
+// ================= [File/Block 1] =================
+┌────────────────────────────────────────────────────────┐
+│                     AppController                      │
+└───────────┬────────────────────────┬─────────────┬─────┘
+            │                        │             │
+            ▼                        ▼             ▼
+┌───────────────────────┐┌──────────────────────┐┌──────────────────────┐
+│      DOMRenderer      ││     LLMService       ││    StorageService    │
+│ (UI, Markdown, Theme) ││ (Mock / OpenAI API)  ││   (Local Storage)    │
+└───────────────────────┘└──────────────────────┘└──────────────────────┘
+
+
+// ================= [File/Block 2] =================
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraChat - Advanced AI Assistant</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts (Inter) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom Scrollbar Styling */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 3px;
+        }
+        /* Smooth transitions */
+        .transition-all-200 {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-all-200 flex overflow-hidden">
+
+    <!-- APP CONTAINER -->
+    <div id="app" class="flex h-full w-full overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transform -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out">
+            <!-- Sidebar Header -->
+            <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">
+                        A
+                    </div>
+                    <span class="font-semibold text-lg tracking-tight">AuraChat Pro</span>
+                </div>
+                <button id="close-sidebar-btn" class="lg:hidden p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- New Chat Button -->
+            <div class="p-4">
+                <button id="new-chat-btn" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 transition-colors shadow-sm shadow-indigo-500/10">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    New Conversation
+                </button>
+            </div>
+
+            <!-- Chat History List -->
+            <div class="flex-1 overflow-y-auto px-3 space-y-1" id="chat-history-list">
+                <!-- Dynamic Content Loaded by JS -->
+            </div>
+
+            <!-- Sidebar Footer / Settings Panel -->
+            <div class="p-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
+                <!-- Theme Toggle & Settings Trigger -->
+                <div class="flex items-center justify-between">
+                    <button id="theme-toggle-btn" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400" title="Toggle Theme">
+                        <i data-lucide="sun" class="hidden dark:block w-5 h-5"></i>
+                        <i data-lucide="moon" class="block dark:hidden w-5 h-5"></i>
+                    </button>
+                    <button id="settings-toggle-btn" class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-400" title="API Settings">
+                        <i data-lucide="settings" class="w-5 h-5"></i>
+                    </button>
+                    <button id="clear-history-btn" class="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/30 text-red-500" title="Clear All Chats">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT AREA -->
+        <main class="flex-1 flex flex-col h-full lg:pl-80 relative overflow-hidden">
+            
+            <!-- Top Navigation Bar -->
+            <header class="h-16 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-4 z-30">
+                <div class="flex items-center gap-3">
+                    <button id="open-sidebar-btn" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i data-lucide="menu" class="w-5 h-5"></i>
+                    </button>
+                    <div>
+                        <h2 id="active-chat-title" class="font-semibold text-slate-800 dark:text-slate-100">New Conversation</h2>
+                        <p id="active-chat-status" class="text-xs text-slate-400 dark:text-slate-500">Local Sandbox Mode</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="api-indicator" class="inline-flex items-center gap-1.5 py-1 px-2.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                        Mock AI
+                    </span>
+                </div>
+            </header>
+
+            <!-- Messages Container -->
+            <div id="messages-container" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
+                <!-- Welcome Screen (Shown when no messages exist) -->
+                <div id="welcome-screen" class="h-full flex flex-col items-center justify-center max-w-lg mx-auto text-center space-y-6 py-12">
+                    <div class="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-950/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-inner">
+                        <i data-lucide="bot" class="w-8 h-8"></i>
+                    </div>
+                    <div class="space-y-2">
+                        <h1 class="text-2xl md:text-3xl font-bold tracking-tight">How can I help you today?</h1>
+                        <p class="text-slate-500 dark:text-slate-400 text-sm md:text-base">
+                            Ask me anything. I can write code, analyze data, or just chat. Switch to OpenAI mode in settings for live responses.
+                        </p>
+                    </div>
+                    <!-- Quick Prompts Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full pt-4">
+                        <button class="quick-prompt-btn p-3 text-left rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/10 transition-all text-sm">
+                            <span class="font-medium block text-slate-700 dark:text-slate-300">Write a Python script</span>
+                            <span class="text-xs text-slate-400">To scrape data from a website safely.</span>
+                        </button>
+                        <button class="quick-prompt-btn p-3 text-left rounded-xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500 dark:hover:border-indigo-500 hover:bg-indigo-50/30 dark:hover:bg-indigo-950/10 transition-all text-sm">
+                            <span class="font-medium block text-slate-700 dark:text-slate-300">Explain CSS Grid</span>
+                            <span class="text-xs text-slate-400">With visual examples and code.</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Form Area -->
+            <footer class="p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <div class="max-w-3xl mx-auto">
+                    <form id="chat-form" class="relative flex items-end gap-2 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+                        <textarea 
+                            id="chat-input" 
+                            rows="1" 
+                            placeholder="Type a message..." 
+                            class="flex-1 bg-transparent border-0 focus:ring-0 resize-none max-h-48 py-2.5 px-3 text-sm text-slate-800 dark:text-slate-100 focus:outline-none"
+                        ></textarea>
+                        <button 
+                            type="submit" 
+                            id="send-btn" 
+                            class="p-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:hover:bg-indigo-600 text-white rounded-xl transition-colors flex items-center justify-center"
+                            disabled
+                        >
+                            <i data-lucide="send-horizontal" class="w-4 h-4"></i>
+                        </button>
+                    </form>
+                    <p class="text-center text-[10px] text-slate-400 dark:text-slate-500 mt-2">
+                        AuraChat can make mistakes. Verify important information.
+                    </p>
+                </div>
+            </footer>
+        </main>
+
+        <!-- SETTINGS MODAL -->
+        <div id="settings-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm">
+            <div class="bg-white dark:bg-slate-900 w-full max-w-md rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden transform scale-95 opacity-0 transition-all duration-200" id="settings-modal-content">
+                <div class="p-5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                    <h3 class="text-lg font-semibold">Configuration Settings</h3>
+                    <button id="close-settings-btn" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <form id="settings-form" class="p-5 space-y-4">
+                    <!-- API Provider Selection -->
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">AI Provider</label>
+                        <select id="setting-provider" class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="mock">Mock Sandbox (Offline/Free)</option>
+                            <option value="openai">OpenAI API (Real-time)</option>
+                        </select>
+                    </div>
+                    <!-- API Key Input -->
+                    <div id="api-key-container" class="space-y-1.5 hidden">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">OpenAI API Key</label>
+                        <input 
+                            type="password" 
+                            id="setting-api-key" 
+                            placeholder="sk-..." 
+                            class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none font-mono"
+                        >
+                    </div>
+                    <!-- Model Selection -->
+                    <div id="model-container" class="space-y-1.5 hidden">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">Model</label>
+                        <select id="setting-model" class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                            <option value="gpt-4o">gpt-4o</option>
+                            <option value="gpt-4-turbo">gpt-4-turbo</option>
+                            <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                        </select>
+                    </div>
+                    <!-- System Prompt -->
+                    <div class="space-y-1.5">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400">System Prompt</label>
+                        <textarea 
+                            id="setting-system-prompt" 
+                            rows="3" 
+                            placeholder="You are a helpful AI assistant..." 
+                            class="w-full p-2.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                        ></textarea>
+                    </div>
+                    <!-- Action Buttons -->
+                    <div class="pt-4 flex justify-end gap-2">
+                        <button type="button" id="cancel-settings-btn" class="px-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 text-sm font-medium hover:bg-slate-50 dark:hover:bg-slate-800">Cancel</button>
+                        <button type="submit" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- APPLICATION LOGIC -->
+    <script>
+        'use strict';
+
+        // ============================================================================
+        // 1. DOMAIN MODELS & TYPES
+        // ============================================================================
+        
+        class Message {
+            constructor(role, content, id = crypto.randomUUID(), timestamp = Date.now()) {
+                this.id = id;
+                this.role = role; // 'user' | 'assistant' | 'system'
+                this.content = content;
+                this.timestamp = timestamp;
+                this.isStreaming = false;
+            }
+        }
+
+        class ChatSession {
+            constructor(title = 'New Conversation', id = crypto.randomUUID(), messages = [], systemPrompt = 'You are a helpful, friendly, and knowledgeable AI assistant.') {
+                this.id = id;
+                this.title = title;
+                this.messages = messages;
+                this.systemPrompt = systemPrompt;
+                this.createdAt = Date.now();
+            }
+        }
+
+        class AppSettings {
+            constructor(provider = 'mock', apiKey = '', model = 'gpt-4o', systemPrompt = 'You are a helpful, friendly, and knowledgeable AI assistant.') {
+                this.provider = provider;
+                this.apiKey = apiKey;
+                this.model = model;
+                this.systemPrompt = systemPrompt;
+                this.theme = 'dark';
+            }
+        }
+
+        // ============================================================================
+        // 2. SERVICES (BUSINESS LOGIC)
+        // ============================================================================
+
+        class StorageService {
+            static KEYS = {
+                SESSIONS: 'aurachat_sessions',
+                ACTIVE_SESSION_ID: 'aurachat_active_session_id',
+                SETTINGS: 'aurachat_settings'
+            };
+
+            static save(key, data) {
+                try {
+                    localStorage.setItem(key, JSON.stringify(data));
+                } catch (error) {
+                    console.error(`[StorageService] Error saving key "${key}":`, error);
+                }
+            }
+
+            static load(key, defaultValue = null) {
+                try {
+                    const data = localStorage.getItem(key);
+                    return data ? JSON.parse(data) : defaultValue;
+                } catch (error) {
+                    console.error(`[StorageService] Error loading key "${key}":`, error);
+                    return defaultValue;
+                }
+            }
+
+            static clear() {
+                try {
+                    localStorage.clear();
+                } catch (error) {
+                    console.error('[StorageService] Error clearing storage:', error);
+                }
+            }
+        }
+
+        // Abstract LLM Service Interface
+        class LLMService {
+            async generateResponse(messages, systemPrompt, onChunk) {
+                throw new Error('Method generateResponse() must be implemented.');
+            }
+        }
+
+        // Mock LLM Service for Offline/Sandbox Mode
+        class MockLLMService extends LLMService {
+            constructor() {
+                super();
+                this.responses = [
+                    "I can help you with that! Here is a clean JavaScript example:\n\n```javascript\n// High-speed array filter\nconst filterActiveUsers = (users) => {\n    return users.filter(user => user.isActive && user.age > 18);\n};\n```\nLet me know if you need any modifications!",
+                    "That is an excellent question. To achieve optimal performance in web applications, you should focus on:\n1. Minimizing DOM manipulations.\n2. Utilizing CSS hardware acceleration.\n3. Implementing efficient state management.\n\nWould you like me to expand on any of these points?",
+                    "Here is a responsive CSS Grid layout example
+
+
